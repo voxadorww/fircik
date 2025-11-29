@@ -17,6 +17,7 @@ export function LobbyScreen({ user, accessToken, onGameStart, onLogout, onViewPr
   const [playerCount, setPlayerCount] = useState(2);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [matchmakingStatus, setMatchmakingStatus] = useState('');
 
   useEffect(() => {
     joinLobby();
@@ -36,7 +37,13 @@ export function LobbyScreen({ user, accessToken, onGameStart, onLogout, onViewPr
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${accessToken}`
-          }
+          },
+          body: JSON.stringify({ 
+            userId: user.id,
+            username: user.username,
+            avatar: user.avatar,
+            poeni: user.poeni || 0
+          })
         }
       );
       
@@ -58,7 +65,8 @@ export function LobbyScreen({ user, accessToken, onGameStart, onLogout, onViewPr
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${accessToken}`
-          }
+          },
+          body: JSON.stringify({ userId: user.id })
         }
       );
     } catch (err) {
@@ -82,7 +90,9 @@ export function LobbyScreen({ user, accessToken, onGameStart, onLogout, onViewPr
       }
       
       const data = await response.json();
-      setLobbyPlayers(data.players || []);
+      // Filter out current user from the list
+      const otherPlayers = (data.players || []).filter((player: any) => player.id !== user.id);
+      setLobbyPlayers(otherPlayers);
     } catch (err) {
       console.error('Fetch lobby players error:', err);
     }
@@ -92,8 +102,11 @@ export function LobbyScreen({ user, accessToken, onGameStart, onLogout, onViewPr
     setSearching(true);
     setLoading(true);
     setError('');
+    setMatchmakingStatus('Tražimo protivnike...');
 
     try {
+      console.log('Starting matchmaking for', playerCount, 'players');
+      
       const response = await fetch(
         `https://${projectId}.supabase.co/functions/v1/make-server-efd87c15/matchmaking/start`,
         {
@@ -102,7 +115,10 @@ export function LobbyScreen({ user, accessToken, onGameStart, onLogout, onViewPr
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${accessToken}`
           },
-          body: JSON.stringify({ playerCount })
+          body: JSON.stringify({ 
+            playerCount,
+            userId: user.id 
+          })
         }
       );
 
@@ -114,30 +130,39 @@ export function LobbyScreen({ user, accessToken, onGameStart, onLogout, onViewPr
       }
 
       if (data.success && data.gameId) {
-        console.log('Game found:', data.gameId);
-        onGameStart(data.gameId);
-      } else if (data.waiting) {
-        setError('Nema dovoljno igrača u lobiju. Molimo sačekajte...');
-        // Continue searching in background
+        console.log('✅ Game found:', data.gameId);
+        setMatchmakingStatus('Igra pronađena! Pokrećemo...');
+        
+        // Wait a moment then start the game
         setTimeout(() => {
-          if (searching) {
-            checkMatchmakingStatus();
-          }
-        }, 3000);
+          onGameStart(data.gameId);
+        }, 1500);
+        
+      } else if (data.waiting) {
+        console.log('⏳ Waiting for players...');
+        setMatchmakingStatus('Čekamo na još igrača...');
+        
+        // Start polling for game status
+        pollForGame();
       } else {
         throw new Error('Nepoznat odgovor od servera');
       }
     } catch (err: any) {
-      console.error('Matchmaking error:', err);
+      console.error('❌ Matchmaking error:', err);
       setError(err.message || 'Greška pri traženju protivnika');
       setSearching(false);
+      setMatchmakingStatus('');
     } finally {
       setLoading(false);
     }
   };
 
-  const checkMatchmakingStatus = async () => {
+  const pollForGame = async () => {
+    if (!searching) return;
+
     try {
+      console.log('🔍 Polling for game status...');
+      
       const response = await fetch(
         `https://${projectId}.supabase.co/functions/v1/make-server-efd87c15/matchmaking/status`,
         {
@@ -148,37 +173,55 @@ export function LobbyScreen({ user, accessToken, onGameStart, onLogout, onViewPr
       );
 
       const data = await response.json();
+      console.log('Polling response:', data);
       
       if (data.gameId) {
-        onGameStart(data.gameId);
+        console.log('✅ Game ready:', data.gameId);
+        setMatchmakingStatus('Svi igrači su spremni!');
+        
+        setTimeout(() => {
+          onGameStart(data.gameId);
+        }, 1000);
+        
       } else if (data.waiting) {
         // Continue waiting
+        setMatchmakingStatus(`Čekamo na još igrača... (${data.playersJoined || 1}/${playerCount})`);
+        
         setTimeout(() => {
           if (searching) {
-            checkMatchmakingStatus();
+            pollForGame();
           }
-        }, 3000);
+        }, 2000);
+      } else if (data.error) {
+        throw new Error(data.error);
       }
-    } catch (err) {
-      console.error('Status check error:', err);
+    } catch (err: any) {
+      console.error('❌ Polling error:', err);
+      setError('Greška pri proveri statusa');
+      setSearching(false);
+      setMatchmakingStatus('');
     }
   };
 
   const cancelSearch = async () => {
     try {
+      console.log('Cancelling matchmaking...');
+      
       await fetch(
         `https://${projectId}.supabase.co/functions/v1/make-server-efd87c15/matchmaking/cancel`,
         {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${accessToken}`
-          }
+          },
+          body: JSON.stringify({ userId: user.id })
         }
       );
     } catch (err) {
       console.error('Cancel search error:', err);
     } finally {
       setSearching(false);
+      setMatchmakingStatus('');
       setError('');
     }
   };
@@ -191,7 +234,7 @@ export function LobbyScreen({ user, accessToken, onGameStart, onLogout, onViewPr
           <h1 className="text-3xl text-white">🂡 Fircik</h1>
           <div className="flex items-center gap-2 bg-[var(--color-fircik-green)] px-4 py-2 rounded-full">
             <Coins className="w-5 h-5 text-[var(--color-fircik-gold)]" />
-            <span className="text-[var(--color-fircik-gold)] font-semibold">{user?.novčići || 0}</span>
+            <span className="text-[var(--color-fircik-gold)] font-semibold">{user?.novčići || 100}</span>
           </div>
         </div>
         
@@ -237,10 +280,10 @@ export function LobbyScreen({ user, accessToken, onGameStart, onLogout, onViewPr
                   onClick={() => setPlayerCount(count)}
                   disabled={searching}
                   className={`
-                    flex-1 py-6 rounded-xl transition-all duration-200
+                    flex-1 py-6 rounded-xl transition-all duration-200 border-2
                     ${playerCount === count 
-                      ? 'bg-[var(--color-fircik-green)] text-white shadow-lg scale-105' 
-                      : 'bg-[var(--color-fircik-gray-light)] text-[var(--color-fircik-gray)] hover:bg-[var(--color-fircik-green-lighter)] hover:text-white'}
+                      ? 'bg-[var(--color-fircik-green)] text-white shadow-lg scale-105 border-[var(--color-fircik-green)]' 
+                      : 'bg-white text-[var(--color-fircik-gray)] border-[var(--color-fircik-gray-light)] hover:border-[var(--color-fircik-green)] hover:text-[var(--color-fircik-green)]'}
                     disabled:opacity-50 disabled:cursor-not-allowed
                   `}
                 >
@@ -253,11 +296,11 @@ export function LobbyScreen({ user, accessToken, onGameStart, onLogout, onViewPr
             </div>
           </div>
 
-          <div className="mb-8 p-6 bg-[var(--color-fircik-beige)] rounded-xl">
+          <div className="mb-8 p-6 bg-[var(--color-fircik-beige)] rounded-xl border-2 border-[var(--color-fircik-gold)] border-opacity-30">
             <h3 className="text-xl text-[var(--color-fircik-green-dark)] mb-3 font-semibold">Cijena ulaska</h3>
             <p className="text-[var(--color-fircik-gray)] flex items-center">
               <Coins className="w-5 h-5 mr-2 text-[var(--color-fircik-gold)]" />
-              10 novčića po igri
+              <span className="font-semibold">10 novčića</span> po igri
             </p>
             <p className="text-sm text-[var(--color-fircik-gray)] mt-2">
               Pobednik osvaja novčiće na osnovu oklade
@@ -265,19 +308,25 @@ export function LobbyScreen({ user, accessToken, onGameStart, onLogout, onViewPr
           </div>
 
           {error && (
-            <div className="mb-4 bg-[var(--color-fircik-red-light)] text-white px-4 py-3 rounded-lg text-center">
+            <div className="mb-4 bg-[var(--color-fircik-red-light)] text-white px-4 py-3 rounded-lg text-center font-medium">
               {error}
+            </div>
+          )}
+
+          {matchmakingStatus && (
+            <div className="mb-4 bg-[var(--color-fircik-green-light)] text-white px-4 py-3 rounded-lg text-center font-medium animate-pulse">
+              {matchmakingStatus}
             </div>
           )}
 
           {!searching ? (
             <button
               onClick={startMatchmaking}
-              disabled={loading || (user?.novčići || 0) < 10}
-              className="w-full bg-[var(--color-fircik-gold)] hover:bg-[var(--color-fircik-gold-light)] text-[var(--color-fircik-green-dark)] py-4 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg flex items-center justify-center gap-3 font-semibold text-lg"
+              disabled={loading}
+              className="w-full bg-[var(--color-fircik-gold)] hover:bg-[var(--color-fircik-gold-light)] text-[var(--color-fircik-green-dark)] py-4 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg flex items-center justify-center gap-3 font-semibold text-lg border-2 border-[var(--color-fircik-gold)]"
             >
               <Search className="w-6 h-6" />
-              {(user?.novčići || 0) < 10 ? 'Nemate dovoljno novčića' : loading ? 'Učitavanje...' : 'Pronađi protivnike'}
+              {loading ? 'Pokrećemo...' : 'Pronađi protivnike'}
             </button>
           ) : (
             <button
@@ -289,13 +338,11 @@ export function LobbyScreen({ user, accessToken, onGameStart, onLogout, onViewPr
             </button>
           )}
 
-          {searching && (
-            <div className="mt-6 text-center">
-              <div className="animate-pulse text-[var(--color-fircik-green)] text-lg">
-                Tražimo protivnike...
-              </div>
-            </div>
-          )}
+          <div className="mt-4 text-center text-sm text-[var(--color-fircik-gray)]">
+            {lobbyPlayers.length > 0 
+              ? `${lobbyPlayers.length} drugih igrača online` 
+              : 'Samo ste vi u lobiju'}
+          </div>
         </motion.div>
 
         {/* Right Panel - Online Players */}
@@ -311,16 +358,18 @@ export function LobbyScreen({ user, accessToken, onGameStart, onLogout, onViewPr
 
           <div className="space-y-3 max-h-[calc(100vh-16rem)] overflow-y-auto pr-2">
             {lobbyPlayers.length === 0 ? (
-              <p className="text-center text-[var(--color-fircik-gray)] py-8">
-                Trenutno nema drugih igrača u lobiju
-              </p>
+              <div className="text-center text-[var(--color-fircik-gray)] py-8">
+                <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>Trenutno nema drugih igrača u lobiju</p>
+                <p className="text-sm mt-2">Pozovite prijatelje da vam se pridruže!</p>
+              </div>
             ) : (
               lobbyPlayers.map((player) => (
                 <motion.div
                   key={player.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center gap-3 p-4 bg-[var(--color-fircik-beige)] rounded-xl hover:bg-[var(--color-fircik-beige)] hover:bg-opacity-80 transition-colors"
+                  className="flex items-center gap-3 p-4 bg-[var(--color-fircik-beige)] rounded-xl hover:bg-[var(--color-fircik-beige)] hover:bg-opacity-80 transition-colors border border-[var(--color-fircik-gray-light)]"
                 >
                   <img
                     src={player.avatar || '/default-avatar.png'}
@@ -334,11 +383,15 @@ export function LobbyScreen({ user, accessToken, onGameStart, onLogout, onViewPr
                     <div className="text-[var(--color-fircik-green-dark)] font-medium">
                       {player.username}
                     </div>
-                    <div className="text-sm text-[var(--color-fircik-gray)]">
+                    <div className="text-sm text-[var(--color-fircik-gray)] flex items-center gap-1">
+                      <Coins className="w-3 h-3" />
                       {player.poeni || 0} poena
                     </div>
                   </div>
-                  <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+                  <div className="flex flex-col items-center">
+                    <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse mb-1" />
+                    <div className="text-xs text-[var(--color-fircik-gray)]">online</div>
+                  </div>
                 </motion.div>
               ))
             )}
