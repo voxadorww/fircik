@@ -82,17 +82,20 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
   };
 
   return (
-    <div className="auth-screen-container landscape-only">
-      <div className="auth-container">
+    <div className="fixed inset-0 bg-gradient-to-br from-[var(--color-fircik-green-dark)] to-[var(--color-fircik-green)] landscape-only flex items-center justify-center p-4">
+      {/* Scrollable container */}
+      <div className="auth-container w-full max-w-md h-[90vh] overflow-y-auto flex justify-center items-center p-2 sm:p-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="auth-card"
+          className="bg-[var(--color-fircik-white)] rounded-2xl shadow-2xl w-full p-4 sm:p-8 flex flex-col gap-4"
         >
           {/* Header */}
-          <div className="auth-header">
-            <h1 className="auth-title">🂡 Fircik</h1>
-            <p className="auth-subtitle">
+          <div className="text-center mb-4 sm:mb-6">
+            <h1 className="text-4xl sm:text-5xl mb-2 text-[var(--color-fircik-green-dark)]">
+              🂡 Fircik
+            </h1>
+            <p className="text-[var(--color-fircik-gray)] text-sm sm:text-base">
               {mode === 'login'
                 ? 'Prijavite se na svoj nalog'
                 : 'Kreirajte novi nalog'}
@@ -100,49 +103,49 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="auth-form">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
             {mode === 'signup' && (
-              <div className="form-group">
-                <label className="form-label">
-                  <User />
+              <div>
+                <label className="block text-[var(--color-fircik-gray)] mb-1 text-sm">
+                  <User className="inline w-4 h-4 mr-1" />
                   Korisničko ime
                 </label>
                 <input
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="form-input"
+                  className="w-full px-3 py-2 sm:px-4 sm:py-3 border-2 border-[var(--color-fircik-gray-light)] rounded-lg focus:border-[var(--color-fircik-green)] text-[var(--color-fircik-black)] text-sm sm:text-base"
                   placeholder="Unesite korisničko ime"
                   required
                 />
               </div>
             )}
 
-            <div className="form-group">
-              <label className="form-label">
-                <Mail />
+            <div>
+              <label className="block text-[var(--color-fircik-gray)] mb-1 text-sm">
+                <Mail className="inline w-4 h-4 mr-1" />
                 Email
               </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="form-input"
+                className="w-full px-3 py-2 sm:px-4 sm:py-3 border-2 border-[var(--color-fircik-gray-light)] rounded-lg focus:border-[var(--color-fircik-green)] text-[var(--color-fircik-black)] text-sm sm:text-base"
                 placeholder="vas@email.com"
                 required
               />
             </div>
 
-            <div className="form-group">
-              <label className="form-label">
-                <Lock />
+            <div>
+              <label className="block text-[var(--color-fircik-gray)] mb-1 text-sm">
+                <Lock className="inline w-4 h-4 mr-1" />
                 Lozinka
               </label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="form-input"
+                className="w-full px-3 py-2 sm:px-4 sm:py-3 border-2 border-[var(--color-fircik-gray-light)] rounded-lg focus:border-[var(--color-fircik-green)] text-[var(--color-fircik-black)] text-sm sm:text-base"
                 placeholder="••••••••"
                 required
                 minLength={6}
@@ -150,7 +153,7 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
             </div>
 
             {error && (
-              <div className="error-message">
+              <div className="bg-[var(--color-fircik-red-light)] text-white px-4 py-2 rounded-lg text-sm">
                 {error}
               </div>
             )}
@@ -158,18 +161,18 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
             <button
               type="submit"
               disabled={loading}
-              className="submit-button"
+              className="w-full bg-[var(--color-fircik-green)] text-white py-2 sm:py-3 rounded-lg hover:bg-[var(--color-fircik-green-light)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
             >
               {loading ? (
                 'Učitavanje...'
               ) : mode === 'login' ? (
                 <>
-                  <LogIn />
+                  <LogIn className="w-5 h-5" />
                   Prijavi se
                 </>
               ) : (
                 <>
-                  <UserPlus />
+                  <UserPlus className="w-5 h-5" />
                   Registruj se
                 </>
               )}
@@ -177,29 +180,34 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
           </form>
 
           {/* Divider */}
-          <div className="divider">
-            <div className="divider-text">
-              <span>ili</span>
+          <div className="relative my-2">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-[var(--color-fircik-gray-light)]"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-[var(--color-fircik-white)] text-[var(--color-fircik-gray)]">
+                ili
+              </span>
             </div>
           </div>
 
           {/* Facebook login */}
           <button
             onClick={handleFacebookLogin}
-            className="facebook-button"
+            className="w-full bg-[#1877F2] text-white py-2 sm:py-3 rounded-lg hover:bg-[#166FE5] flex items-center justify-center gap-2 transition-colors"
           >
-            <Facebook />
+            <Facebook className="w-5 h-5" />
             Nastavi sa Facebook-om
           </button>
 
           {/* Switch mode */}
-          <div className="switch-mode">
+          <div className="mt-2 text-center text-sm">
             <button
               onClick={() => {
                 setMode(mode === 'login' ? 'signup' : 'login');
                 setError('');
               }}
-              className="switch-button"
+              className="text-[var(--color-fircik-green)] hover:underline"
             >
               {mode === 'login'
                 ? 'Nemate nalog? Registrujte se'
